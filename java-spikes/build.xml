@@ -1,0 +1,12 @@
+
+<project name="test" default="dist">
+	<!-- <property name="build.compiler" value="org.eclipse.jdt.core.JDTCompilerAdapter"/> -->
+
+	<target name="dist">
+		<delete dir="tmp/classes" />
+		<mkdir dir="tmp/classes" />
+		<javac destdir="tmp/classes" source="1.5" target="1.5">
+			<src location="src2" />
+		</javac>
+	</target>
+</project>
