@@ -29,11 +29,7 @@
 
 package dk.brics.automaton;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Construction of basic automata.
@@ -261,7 +257,32 @@ final public class BasicAutomata {
 		a.deterministic = true;
 		return a;
 	}
-	
+
+    /**
+     * Returns a new (deterministic and minimal) automaton that accepts the union of the
+     * given set of strings. The input character sequences are internally sorted in-place,
+     * so the input array is modified. 
+     */
+    public static Automaton makeStringUnion(CharSequence... strings) {
+        if (strings.length == 0)
+            return makeEmpty();
+
+        Arrays.sort(strings, DaciukMihovAutomatonBuilder.LEXICOGRAPHIC_ORDER);
+        State root = DaciukMihovAutomatonBuilder.build(strings);
+        
+        Automaton automaton = new Automaton();
+        automaton.setInitialState(root);
+        automaton.setDeterministic(true);
+
+        // Recompute hash code without minimization, the automaton should be minimal already.
+        automaton.hash_code = automaton.getNumberOfStates() * 3 
+            + automaton.getNumberOfTransitions() * 2;
+        if (automaton.hash_code == 0)
+            automaton.hash_code = 1;
+        
+        return automaton;
+    }
+
 	/**
 	 * Constructs automaton that accept strings representing nonnegative integers
 	 * that are not larger than the given value.

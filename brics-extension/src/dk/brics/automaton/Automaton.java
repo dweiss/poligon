@@ -751,7 +751,14 @@ public class Automaton implements Serializable, Cloneable {
 	public static Automaton makeString(String s) {
 		return BasicAutomata.makeString(s);
 	}
-	
+
+    /** 
+     * See {@link BasicAutomata#makeStringUnion(CharSequence...)}.
+     */
+    public static Automaton makeStringUnion(CharSequence... strings) {
+        return BasicAutomata.makeStringUnion(strings);
+    }
+
 	/**
 	 * See {@link BasicAutomata#makeMaxInteger(String)}.
 	 */
