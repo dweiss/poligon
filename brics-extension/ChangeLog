@@ -1,3 +1,5 @@
+- added Daciuk/Mihov algorithm for constructing a minimal automaton that accepts a union of strings.
+
 1.11-1 -> 1.11-2
 ================
 - fixed bug in RegExp parser - thanks to A. Meyer
