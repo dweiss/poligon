@@ -384,6 +384,7 @@ public class Automaton implements Serializable, Cloneable {
 			if (p != null)
 				s.transitions.add(new Transition((char)min, (char)max, p));
 		}
+		clearHashCode();
 	}
 	
 	/** 
