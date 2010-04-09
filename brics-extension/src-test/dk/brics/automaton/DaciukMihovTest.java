@@ -56,7 +56,7 @@ public class DaciukMihovTest
         long daciuk = System.currentTimeMillis();
         Automaton b = makeUnion(input);
         long union = System.currentTimeMillis();
-        System.out.println("Daciuk: " + (daciuk - start) + ", union: " + (union - daciuk));
+        System.out.println("Daciuk+reduce: " + (daciuk - start) + ", union: " + (union - daciuk));
         Assert.assertEquals(a, b);
     }
 
@@ -90,7 +90,7 @@ public class DaciukMihovTest
         char [] chars = new char [length.min + rnd.nextInt(length.range())];
         for (int i = 0; i < chars.length; i++)
         {
-            chars[i] = (char) (alphabet.min + 2 * rnd.nextInt(alphabet.range()));
+            chars[i] = (char) (alphabet.min + rnd.nextInt(alphabet.range()));
         }
         return new String(chars);
     }

@@ -274,6 +274,9 @@ final public class BasicAutomata {
         automaton.setInitialState(root);
         automaton.setDeterministic(true);
 
+        // Reduce (merge transitions with overlapping labels).
+        automaton.reduce();
+
         // Recompute hash code without minimization, the automaton should be minimal already.
         automaton.hash_code = automaton.getNumberOfStates() * 3 
             + automaton.getNumberOfTransitions() * 2;
