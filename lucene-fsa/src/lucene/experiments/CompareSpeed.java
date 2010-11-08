@@ -10,9 +10,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Random;
 
-import morfologik.fsa.CFSASerializer;
 import morfologik.fsa.FSA;
-import morfologik.fsa.FSA5;
+import morfologik.fsa.FSA5Serializer;
 import morfologik.fsa.FSABuilder;
 import morfologik.fsa.FSATraversal;
 import morfologik.fsa.State;
@@ -66,7 +65,7 @@ public class CompareSpeed
         log("Building FSA with perfect hashes...");
         long start = System.currentTimeMillis();
         State root = FSABuilder.build(data);
-        byte [] serializedFsa = new CFSASerializer().withNumbers().serialize(
+        byte [] serializedFsa = new FSA5Serializer().withNumbers().serialize(
             root, new ByteArrayOutputStream()).toByteArray();
         FSA fsa = FSA.read(new ByteArrayInputStream(serializedFsa));
         long end = System.currentTimeMillis();
@@ -89,7 +88,7 @@ public class CompareSpeed
         /*
          * Binary search.
          */
-        log("Speed test, binary search...");
+        log("\nSpeed test, binary search...");
         start = System.currentTimeMillis();
         for (int i = 0; i < REPEATS; i++)
         {
@@ -106,15 +105,14 @@ public class CompareSpeed
         log("bsearch: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
 
         /*
-         * 
+         * FSA, with perfect hashes. 
          */
-        log("Speed test, FSA search...");
+        log("\nSpeed test, FSA search w/perfect hash...");
         found = 0;
         cumulativeCheck = 0;
         rnd = new Random(seed);
         start = System.currentTimeMillis();
         FSATraversal t = new FSATraversal(fsa);
-
         for (int i = 0; i < REPEATS; i++)
         {
             byte [] key = input.get(rnd.nextInt(input.size()));
@@ -127,8 +125,28 @@ public class CompareSpeed
             }
         }
         end = System.currentTimeMillis();
-        log("Found sequences: " + found);
         log("Found sequences: " + found + ", cum. check: " + cumulativeCheck);
+        log("fsa: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
+        
+
+        /*
+         * FSA, hit/miss only. 
+         */
+        log("\nSpeed test, FSA search, hit/miss only...");
+        found = 0;
+        rnd = new Random(seed);
+        start = System.currentTimeMillis();
+        for (int i = 0; i < REPEATS; i++)
+        {
+            byte [] key = input.get(rnd.nextInt(input.size()));
+
+            if (hasMatch(fsa, key))
+            {
+                found++;
+            }
+        }
+        end = System.currentTimeMillis();
+        log("Found sequences: " + found);
         log("fsa: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
     }
 
@@ -148,7 +166,7 @@ public class CompareSpeed
     /**
      * 
      */
-    private static boolean hasMatch(FSA5 fsa, byte [] key)
+    private static boolean hasMatch(FSA fsa, byte [] key)
     {
         int node = fsa.getRootNode();
         final int max = key.length;
