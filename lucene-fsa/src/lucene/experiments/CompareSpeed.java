@@ -26,7 +26,6 @@ public class CompareSpeed
      */
     public static void main(String [] args) throws Exception
     {
-
         ArrayList<byte []> input;
 
         // Get the input from a text file.
@@ -65,8 +64,10 @@ public class CompareSpeed
         log("Building FSA with perfect hashes...");
         long start = System.currentTimeMillis();
         State root = FSABuilder.build(data);
-        byte [] serializedFsa = new FSA5Serializer().withNumbers().serialize(
-            root, new ByteArrayOutputStream()).toByteArray();
+        byte [] serializedFsa = new FSA5Serializer()
+            .withNumbers()
+            .withBreadthFirstOrder(5)
+            .serialize(root, new ByteArrayOutputStream()).toByteArray();
         FSA fsa = FSA.read(new ByteArrayInputStream(serializedFsa));
         long end = System.currentTimeMillis();
         log("FSA built in: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");

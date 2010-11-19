@@ -13,7 +13,7 @@ import morfologik.util.BufferUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
-public abstract class SerializerTestBase {
+public abstract class SerializerTestBase<T extends FSASerializer> {
     /**
      * 
      */
@@ -194,7 +194,7 @@ public abstract class SerializerTestBase {
     	checkSerialization(in, root);
     }
 
-    private void checkSerialization(byte[][] input, State root)
+    protected void checkSerialization(byte[][] input, State root)
             throws IOException {
             	checkSerialization0(createSerializer(), input, root);
             	checkSerialization0(createSerializer().withNumbers(), input, root);
@@ -306,5 +306,5 @@ public abstract class SerializerTestBase {
     /**
      * 
      */
-    protected abstract FSASerializer createSerializer();
+    protected abstract T createSerializer();
 }

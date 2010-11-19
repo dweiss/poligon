@@ -3,7 +3,7 @@ package morfologik.fsa;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.*;
 
 
 /**
@@ -51,6 +51,11 @@ public final class FSA5Serializer implements FSASerializer {
 	private boolean withNumbers;
 
 	/**
+	 * If larger than zero, serialize breadth-first nodes from the root first. 
+	 */
+	private int breadthDepth;
+
+	/**
 	 * Serialize the automaton with the number of right-language sequences in
 	 * each node. This is required to implement perfect hashing. The numbering
 	 * also preserves the order of input sequences.
@@ -61,6 +66,29 @@ public final class FSA5Serializer implements FSASerializer {
 	public FSA5Serializer withNumbers() {
 		withNumbers = true;
 	    return this;
+    }
+
+    /**
+     * When serializing the automaton, try to squeeze nodes close to the automaton
+     * root at the beginning of the serialized structure. This should help place
+     * more nodes frequently used in traversals close together in memory, hopefully
+     * making CPU cache happier.
+     * 
+     * <p>There is a tradeoff of doing such serialization because arcs will need explicit
+     * goto offsets, thus making the automaton slightly larger. 
+     * 
+     * 
+     * @param depth Starting at the root, nodes up to this depth will be serialized
+     * in breadth-first order. So, for the root arcs only, the depth should be set to 1. For the
+     * root and nodes available from the root, depth should be 2 and so on.
+     *  
+     * @return Returns the same object for easier call chaining.
+     */
+    public FSA5Serializer withBreadthFirstOrder(int depth) {
+        if (depth <= 0) throw new IllegalArgumentException("Depth must be >= 1: " + depth);
+
+        this.breadthDepth = depth + /* account for the dummy node. */ 1;
+        return this;
     }
 
 	/**
@@ -110,12 +138,7 @@ public final class FSA5Serializer implements FSASerializer {
 		s = meta.intern(pool);
 
 		// Prepare space for arc offsets and linearize all the states.
-		s.preOrder(new Visitor<State>() {
-			public void accept(State s) {
-				s.offset = 0;
-				linearized.add(s);
-			}
-		});
+		linearize(s, linearized);
 
 		/*
 		 * Calculate the number of bytes required for the node data,
@@ -164,7 +187,63 @@ public final class FSA5Serializer implements FSASerializer {
 		return os;
 	}
 
+	/** */
+	private final static class StateDepth {
+	    public final State state;
+	    public final int depth;
+
+	    StateDepth(State s, int depth) {
+	        this.state = s;
+	        this.depth = depth;
+	    }
+	}
+
 	/**
+	 * Linearize states for serialization.
+	 */
+	private void linearize(State root, final ArrayList<State> linearized) {
+	    final IdentityHashMap<State, State> visited = new IdentityHashMap<State, State>(); 
+        final ArrayDeque<StateDepth> queue = new ArrayDeque<StateDepth>();
+        final ArrayList<State> remaining = new ArrayList<State>();
+
+        queue.push(new StateDepth(root, 0));
+
+        while (!queue.isEmpty()) {
+            StateDepth sd = queue.removeFirst();
+            State current = sd.state;
+            
+            if (visited.containsKey(current))
+                continue;
+
+            if (sd.depth < breadthDepth) {
+                visited.put(current, current);
+                current.offset = 0;
+                linearized.add(current);
+
+                for (int i = 0; i < current.arcsCount(); i++) {
+                    queue.addLast(new StateDepth(current.arcState(i), sd.depth + 1));
+                }
+            } else {
+                remaining.add(current);
+            }
+        }
+
+        System.out.println("Breadth first: " + linearized.size());
+
+        for (State s : remaining) {
+            s.preOrder(new Visitor<State>() {
+                public void accept(State s) {
+                    if (!visited.containsKey(s)) {
+                        visited.put(s, s);
+                        s.offset = 0;
+                        linearized.add(s);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
 	 * Update arc offsets assuming the given goto length.
 	 */
 	private boolean emitArcs(OutputStream os, 
