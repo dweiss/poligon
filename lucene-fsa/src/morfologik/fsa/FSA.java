@@ -150,6 +150,9 @@ public abstract class FSA implements Iterable<ByteBuffer> {
 		if (header.version == CFSA.VERSION)
 			return (T) new CFSA(in);
 
+        if (header.version == CFSA2.VERSION)
+            return (T) new CFSA2(in);
+
 	    throw new IOException("Unsupported automaton version: " + header.version);
     }
 }

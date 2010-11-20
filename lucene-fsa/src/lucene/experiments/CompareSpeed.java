@@ -10,10 +10,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Random;
 
+import morfologik.fsa.CFSA2;
+import morfologik.fsa.CFSA2Serializer;
 import morfologik.fsa.FSA;
-import morfologik.fsa.FSA5Serializer;
 import morfologik.fsa.FSABuilder;
-import morfologik.fsa.FSATraversal;
 import morfologik.fsa.State;
 
 /**
@@ -39,7 +39,7 @@ public class CompareSpeed
         log("Generating input...");
         input = new ArrayList<byte []>();
 
-        int inputSequences = 2000000;
+        int inputSequences = 1000000;
         final ClassLoader ccl = Thread.currentThread().getContextClassLoader();
         for (ByteBuffer bb : FSA.read(ccl.getResourceAsStream("morfologik/dictionaries/pl.dict")))
         {
@@ -65,9 +65,14 @@ public class CompareSpeed
         log("Building FSA with perfect hashes...");
         long start = System.currentTimeMillis();
         State root = FSABuilder.build(data);
-        byte [] serializedFsa = new FSA5Serializer().withNumbers().serialize(
-            root, new ByteArrayOutputStream()).toByteArray();
-        FSA fsa = FSA.read(new ByteArrayInputStream(serializedFsa));
+        byte [] serializedFsa = 
+            new CFSA2Serializer()
+            .withNumbers()
+            .withNodesExpandedIfLargerThan(20)
+            //.withNodesExpandedIfLargerThan(3)
+            .serialize(root, new ByteArrayOutputStream()).toByteArray();
+
+        CFSA2 fsa = FSA.read(new ByteArrayInputStream(serializedFsa));
         long end = System.currentTimeMillis();
         log("FSA built in: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
         log("FSA size (bytes): " + serializedFsa.length);
@@ -112,12 +117,11 @@ public class CompareSpeed
         cumulativeCheck = 0;
         rnd = new Random(seed);
         start = System.currentTimeMillis();
-        FSATraversal t = new FSATraversal(fsa);
         for (int i = 0; i < REPEATS; i++)
         {
-            byte [] key = input.get(rnd.nextInt(input.size()));
+            final byte [] key = input.get(rnd.nextInt(input.size()));
 
-            int keyIndex = t.perfectHash(key);
+            final int keyIndex = perfectHash(fsa, key);
             if (keyIndex >= 0)
             {
                 cumulativeCheck += values[keyIndex];
@@ -148,6 +152,47 @@ public class CompareSpeed
         end = System.currentTimeMillis();
         log("Found sequences: " + found);
         log("fsa: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
+    }
+
+    /*
+     * 
+     */
+    private static int perfectHash(CFSA2 fsa, byte [] key)
+    {
+        int node = fsa.getRootNode();
+        int hash = 0;
+
+        final int max = key.length;
+        for (int i = 0; i < max; i++)
+        {
+            final int arc = fsa.getArc(node, key[i]);
+            if (arc != 0)
+            {
+                hash += fsa.getNumbersSumToArc(node, arc);
+
+                if (fsa.isArcFinal(arc))
+                {
+                    if (i + 1 == max) {
+                        return hash;
+                    }
+
+                    hash++;
+                }
+
+                if (fsa.isArcTerminal(arc)) 
+                    return -1;
+
+                // make a transition along the arc.
+                node  = fsa.getEndNode(arc);
+            }
+            else
+            {
+                // The label was not found.
+                return -1;
+            }
+        }
+
+        return -1;
     }
 
     /**
