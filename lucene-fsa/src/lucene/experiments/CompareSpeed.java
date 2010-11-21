@@ -26,6 +26,12 @@ public class CompareSpeed
      */
     public static void main(String [] args) throws Exception
     {
+        /*
+         * Repeat using these
+         */
+        long seed = 0x11223344;
+        int REPEATS = 5000000;
+        int INPUT_SEQUENCES = 1000000;
 
         ArrayList<byte []> input;
 
@@ -39,7 +45,7 @@ public class CompareSpeed
         log("Generating input...");
         input = new ArrayList<byte []>();
 
-        int inputSequences = 1000000;
+        int inputSequences = INPUT_SEQUENCES;
         final ClassLoader ccl = Thread.currentThread().getContextClassLoader();
         for (ByteBuffer bb : FSA.read(ccl.getResourceAsStream("morfologik/dictionaries/pl.dict")))
         {
@@ -59,29 +65,7 @@ public class CompareSpeed
         byte [][] data = input.subList(0, dataSize).toArray(new byte [dataSize] []);
         long [] values = generateRandomLongs(dataSize);
 
-        /*
-         * Construct FSA
-         */
-        log("Building FSA with perfect hashes...");
-        long start = System.currentTimeMillis();
-        State root = FSABuilder.build(data);
-        byte [] serializedFsa = 
-            new CFSA2Serializer()
-            .withNumbers()
-            .withNodesExpandedIfLargerThan(20)
-            //.withNodesExpandedIfLargerThan(3)
-            .serialize(root, new ByteArrayOutputStream()).toByteArray();
-
-        CFSA2 fsa = FSA.read(new ByteArrayInputStream(serializedFsa));
-        long end = System.currentTimeMillis();
-        log("FSA built in: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
-        log("FSA size (bytes): " + serializedFsa.length);
-
-        /*
-         * Repeat using these
-         */
-        long seed = 0x11223344;
-        int REPEATS = 5000000;
+        long start, end;
 
         /*
          * Searches using binary search. 
@@ -90,68 +74,100 @@ public class CompareSpeed
         int found = 0;
         long cumulativeCheck = 0;
 
-        /*
-         * Binary search.
-         */
-        log("\nSpeed test, binary search...");
-        start = System.currentTimeMillis();
-        for (int i = 0; i < REPEATS; i++)
+        for (int nodes = 0; nodes < 256; nodes++)
         {
-            byte [] key = input.get(rnd.nextInt(input.size()));
-            int keyIndex = java.util.Arrays.binarySearch(data, key, FSABuilder.LEXICAL_ORDERING);
-            if (keyIndex >= 0)
+            /*
+             * Binary search.
+             */
+            log("\nSpeed test, binary search...");
+            start = System.currentTimeMillis();
+            for (int i = 0; i < REPEATS; i++)
             {
-                cumulativeCheck += values[keyIndex];
-                found++;
+                byte [] key = input.get(rnd.nextInt(input.size()));
+                int keyIndex = java.util.Arrays.binarySearch(data, key, FSABuilder.LEXICAL_ORDERING);
+                if (keyIndex >= 0)
+                {
+                    cumulativeCheck += values[keyIndex];
+                    found++;
+                }
             }
-        }
-        end = System.currentTimeMillis();
-        log("Found sequences: " + found + ", cum. check: " + cumulativeCheck);
-        log("bsearch: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
+            end = System.currentTimeMillis();
+            log("Found sequences: " + found + ", cum. check: " + cumulativeCheck);
+            double bsearchTime = (end - start) / 1000.0;
+            log("bsearch: " + String.format("%.2f", bsearchTime) + " sec.");
 
-        /*
-         * FSA, with perfect hashes. 
-         */
-        log("\nSpeed test, FSA search w/perfect hash...");
-        found = 0;
-        cumulativeCheck = 0;
-        rnd = new Random(seed);
-        start = System.currentTimeMillis();
-        for (int i = 0; i < REPEATS; i++)
-        {
-            final byte [] key = input.get(rnd.nextInt(input.size()));
-
-            final int keyIndex = perfectHash(fsa, key);
-            if (keyIndex >= 0)
+            /*
+             * Construct FSA
+             */
+            log("\nBuilding FSA with perfect hashes...");
+            start = System.currentTimeMillis();
+            State root = FSABuilder.build(data);
+            byte [] serializedFsa = 
+                new CFSA2Serializer()
+                .withNumbers()
+                .withNodesExpandedIfLargerThan(nodes)
+                .serialize(root, new ByteArrayOutputStream()).toByteArray();
+    
+            CFSA2 fsa = FSA.read(new ByteArrayInputStream(serializedFsa));
+            end = System.currentTimeMillis();
+            double fsaBuildTime = (end - start) / 1000.0;
+            log("FSA built in: " + String.format("%.2f", fsaBuildTime) + " sec.");
+            log("FSA size (bytes): " + serializedFsa.length);
+            
+            /*
+             * FSA, with perfect hashes. 
+             */
+            log("\nSpeed test, FSA search w/perfect hash...");
+            found = 0;
+            cumulativeCheck = 0;
+            rnd = new Random(seed);
+            start = System.currentTimeMillis();
+            for (int i = 0; i < REPEATS; i++)
             {
-                cumulativeCheck += values[keyIndex];
-                found++;
+                final byte [] key = input.get(rnd.nextInt(input.size()));
+    
+                final int keyIndex = perfectHash(fsa, key);
+                if (keyIndex >= 0)
+                {
+                    cumulativeCheck += values[keyIndex];
+                    found++;
+                }
             }
-        }
-        end = System.currentTimeMillis();
-        log("Found sequences: " + found + ", cum. check: " + cumulativeCheck);
-        log("fsa: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
-        
+            end = System.currentTimeMillis();
+            log("Found sequences: " + found + ", cum. check: " + cumulativeCheck);
+            double fsaPhashTime = (end - start) / 1000.0;
+            log("cfsa2 phash: " + String.format("%.2f", fsaPhashTime) + " sec.");
 
-        /*
-         * FSA, hit/miss only. 
-         */
-        log("\nSpeed test, FSA search, hit/miss only...");
-        found = 0;
-        rnd = new Random(seed);
-        start = System.currentTimeMillis();
-        for (int i = 0; i < REPEATS; i++)
-        {
-            byte [] key = input.get(rnd.nextInt(input.size()));
 
-            if (hasMatch(fsa, key))
+            /*
+             * FSA, hit/miss only. 
+             */
+            log("\nSpeed test, FSA search, hit/miss only...");
+            found = 0;
+            rnd = new Random(seed);
+            start = System.currentTimeMillis();
+            for (int i = 0; i < REPEATS; i++)
             {
-                found++;
+                byte [] key = input.get(rnd.nextInt(input.size()));
+    
+                if (hasMatch(fsa, key))
+                {
+                    found++;
+                }
             }
+            end = System.currentTimeMillis();
+            log("Found sequences: " + found);
+            double fsaHitMissTime = (end - start) / 1000.0;
+            log("fsa: " + String.format("%.2f", fsaHitMissTime) + " sec.");
+
+            log("\n> sequences: " + INPUT_SEQUENCES +
+                " repeats: " + REPEATS +
+                " nodes: " + nodes +
+                " fsa size: " + serializedFsa.length + 
+                " bsearch: " + String.format("%.2f", bsearchTime) +
+                " fsa/phash: " + String.format("%.2f", fsaPhashTime) +
+                " fsa/hitmiss: " + String.format("%.2f", fsaHitMissTime));
         }
-        end = System.currentTimeMillis();
-        log("Found sequences: " + found);
-        log("fsa: " + String.format("%.2f", (end - start) / 1000.0) + " sec.");
     }
 
     /*
