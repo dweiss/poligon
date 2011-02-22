@@ -1,0 +1,10 @@
+<aspectj>
+    <aspects>
+    </aspects>
+
+    <weaver options="
+    -XnoInline
+    -verbose
+    -showWeaveInfo" />
+</aspectj>
+
