@@ -1,0 +1,59 @@
+  // demuxing multithreaded sysout calls? why not ;)
+
+  static class PerThreadOutputStream extends OutputStream {
+    ThreadLocal<ByteArrayOutputStream> baos = new ThreadLocal<ByteArrayOutputStream>();
+    private PrintStream sink;
+
+    public PerThreadOutputStream(PrintStream sink) {
+      this.sink = sink;
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+      ByteArrayOutputStream os = baos.get();
+      if (os == null) {
+        os = new ByteArrayOutputStream();
+        baos.set(os);
+      }
+      os.write(b);
+
+      if (b == '\n') {
+        flushToSink();
+      }
+    }
+
+    private void flushToSink() throws IOException {
+      synchronized (sink) {
+        ByteArrayOutputStream os = baos.get();
+        if (os != null) {
+          sink.write(os.toByteArray());
+          os.reset();
+        }
+      }
+    }
+  }
+
+  public static void main(String[] args) {
+    System.setOut(new PrintStream(new PerThreadOutputStream(System.out)));
+
+    final CountDownLatch latch = new CountDownLatch(1);
+    for (int i = 0; i < 10; i++) {
+      final int j = i;
+      Thread t = new Thread() {
+        @Override
+        public void run() {
+          try {
+            latch.await();
+            for (int k = 0; k < 10; k++) {
+              Thread.sleep(50);
+              System.out.print(j);
+            }
+            System.out.println();
+          } catch (Exception e) {
+          }
+        }
+      };
+      t.start();
+    }
+    latch.countDown();
+  }
