@@ -1,8 +1,11 @@
-import java.util.List;
+import java.io.StringReader;
 
+import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.hunspell.HunspellDictionary;
-import org.apache.lucene.analysis.hunspell.HunspellStemmer;
-import org.apache.lucene.analysis.hunspell.HunspellStemmer.Stem;
+import org.apache.lucene.analysis.hunspell.HunspellStemFilter;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.util.Version;
 
 
@@ -17,11 +20,19 @@ public class CheckHunspell
             cl.getResourceAsStream("hr_HR.dic"),
             Version.LUCENE_CURRENT,
             true);
-        HunspellStemmer stemmer = new HunspellStemmer(dict);
+
+        String in = "Hrvatska (službeni naziv: Republika Hrvatska) europska je država, zemljopisno smještena na prijelazu iz Srednje u Jugoistočnu Europu. Hrvatska graniči na sjeveru sa Slovenijom i Mađarskom, na istoku sa Srbijom, na jugu i istoku s Bosnom i Hercegovinom i Crnom Gorom. S Italijom ima morsku granicu. Tijekom hrvatske povijesti najznačajniji kulturološki utjecaji dolazili su iz srednjoeuropskog i sredozemnog kulturnog kruga.";
         
-        List<Stem> stems = stemmer.stem("admiralom");
-        for (Stem s : stems) {
-            System.out.println("> " + s.getStemString());
+        StandardAnalyzer analyzer = new StandardAnalyzer(Version.LUCENE_CURRENT);
+        TokenStream tokenStream = analyzer.tokenStream("", new StringReader(in));
+        HunspellStemFilter filter = new HunspellStemFilter(tokenStream, dict);
+
+        CharTermAttribute term = filter.getAttribute(CharTermAttribute.class);
+        PositionIncrementAttribute pos = filter.getAttribute(PositionIncrementAttribute.class);
+        while (filter.incrementToken()) {
+            System.out.println(
+                term.toString() + ": " +
+                pos.getPositionIncrement());
         }
     }
 }
