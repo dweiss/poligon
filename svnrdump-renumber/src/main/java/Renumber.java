@@ -65,6 +65,9 @@ public class Renumber {
 
     cnt = 0;
     try (OutputStream os = new BufferedOutputStream(Files.newOutputStream(revsDir.resolveSibling("renamed.dump")))) {
+      os.write("SVN-fs-dump-format-version: 3\n\n".getBytes(StandardCharsets.US_ASCII));
+      os.write("UUID: 13f79535-47bb-0310-9956-ffa450edef68\n\n".getBytes(StandardCharsets.US_ASCII));
+
       for (long origRev : originalRevs) {
         long newRev = revisions.getOrDefault(origRev, -1);
         if (newRev < 0) throw new RuntimeException();
@@ -72,24 +75,39 @@ public class Renumber {
         if ((++cnt % 10000) == 0) {
           System.out.println("2> " + cnt);
         }
-  
+
         Path p = revsDir.resolve("r" + origRev + ".rev");
         visitDumpFile(p,
             (headers) -> {
-              // TODO: convert headers, emit once:
-              // SVN-fs-dump-format-version: 3
-              // UUID: 13f79535-47bb-0310-9956-ffa450edef68
-              // emit bodies.
-
-              String revNum = headers.get("Node-copyfrom-rev");
-              if (revNum != null) {
-                long parseLong = Long.parseLong(revNum);
-                if (!revisions.containsKey(parseLong)) {
-                  throw new RuntimeException();
+              if (headers.size() == 1) {
+                if (headers.containsKey("SVN-fs-dump-format-version") ||
+                    headers.containsKey("UUID")) {
+                  return;
                 }
               }
+
+              // Emit headers, modify them on the way.
+              headers.forEach((k, v) -> {
+                if (k.equals("Node-copyfrom-rev") ||
+                    k.equals("Revision-number")) {
+                  v = Long.toString(revisions.get(Long.parseLong(v)));
+                }
+
+                try {
+                  os.write((k + ": "+ v + "\n").getBytes(StandardCharsets.US_ASCII));
+                } catch (IOException e) {
+                  throw new RuntimeException(e);
+                }
+              });
             },
-            (body) -> {});
+            (body) -> {
+              try {
+                ByteStreams.copy(body, os);
+                os.write('\n');
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            });
       }
     }
 
@@ -115,7 +133,10 @@ public class Renumber {
           long length = Long.parseLong(headers.get("Content-length"));
           InputStream limit = ByteStreams.limit(is, length);
           bodyConsumer.accept(limit);
-          limit.skip(length);
+          while (limit.skip(length) > 0);
+          if (is.read() != '\n') {
+            throw new IOException();
+          }
         }
       } while (true);
     }
