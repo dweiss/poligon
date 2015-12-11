@@ -124,6 +124,10 @@ public class Renumber {
       do {
         headers(is, headers, lineBuffer);
         if (headers.isEmpty()) {
+          if (is.read() != -1) {
+            System.out.println(path + "\n" + new String(ByteStreams.toByteArray(is)));
+            throw new IOException();
+          }
           break;
         }
         
@@ -134,9 +138,6 @@ public class Renumber {
           InputStream limit = ByteStreams.limit(is, length);
           bodyConsumer.accept(limit);
           while (limit.skip(length) > 0);
-          if (is.read() != '\n') {
-            throw new IOException();
-          }
         }
       } while (true);
     }
@@ -145,6 +146,7 @@ public class Renumber {
   private static void headers(InputStream is, LinkedHashMap<String, String> headers, ByteArrayList lineBuffer) 
       throws IOException {
     headers.clear();
+outer:
     while (true) {
       lineBuffer.clear();
       int b;
@@ -154,8 +156,15 @@ public class Renumber {
         }
         lineBuffer.add((byte) b);
       }
+      
+      if (b == -1) {
+        return;
+      }
 
       if (lineBuffer.isEmpty()) {
+        if (headers.isEmpty()) {
+          continue outer;
+        }
         return;
       }
       
