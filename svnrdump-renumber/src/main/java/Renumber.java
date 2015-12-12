@@ -57,12 +57,14 @@ public class Renumber {
 
     // Remap revisions to be contiguous and start at 1.
     long [] originalRevs = Arrays.stream(revisions.keys().toArray()).sorted().toArray();
+    System.out.println("Revs: " + originalRevs.length);
     
     long rev = 1;
     for (long key : originalRevs) {
       revisions.put(key, rev++);
     }
 
+    // Rewrite individual revisions into a contiguous dump file.
     cnt = 0;
     try (OutputStream os = new BufferedOutputStream(Files.newOutputStream(revsDir.resolveSibling("renamed.dump")))) {
       os.write("SVN-fs-dump-format-version: 3\n\n".getBytes(StandardCharsets.US_ASCII));
@@ -75,7 +77,7 @@ public class Renumber {
         if ((++cnt % 10000) == 0) {
           System.out.println("2> " + cnt);
         }
-
+        
         Path p = revsDir.resolve("r" + origRev + ".rev");
         visitDumpFile(p,
             (headers) -> {
@@ -85,12 +87,25 @@ public class Renumber {
                   return;
                 }
               }
-
+              
               // Emit headers, modify them on the way.
               headers.forEach((k, v) -> {
                 if (k.equals("Node-copyfrom-rev") ||
                     k.equals("Revision-number")) {
-                  v = Long.toString(revisions.get(Long.parseLong(v)));
+                  long vv = Long.parseLong(v);
+                  if (!revisions.containsKey(vv)) {
+                    // Copied from an intermediate, non-Lucene revision.
+                    int slot = Arrays.binarySearch(originalRevs, vv);
+                    slot = -slot - 1;
+                    assert originalRevs[slot] > vv &&
+                           originalRevs[slot - 1] < vv : 
+                             originalRevs[slot - 1] + " " + vv + " " + originalRevs[slot];
+                   
+                    // Take the largest Lucene-tree touching revision.
+                    vv = originalRevs[slot - 1];
+                    assert revisions.containsKey(vv);
+                  }
+                  v = Long.toString(revisions.get(vv));
                 }
 
                 try {
@@ -99,10 +114,17 @@ public class Renumber {
                   throw new RuntimeException(e);
                 }
               });
+              
+              try {
+                os.write('\n');
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
             },
             (body) -> {
               try {
                 ByteStreams.copy(body, os);
+                os.write('\n');
                 os.write('\n');
               } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -130,14 +152,28 @@ public class Renumber {
           }
           break;
         }
-        
-        headerConsumer.accept(headers);
 
-        if (headers.containsKey("Content-length")) {
-          long length = Long.parseLong(headers.get("Content-length"));
-          InputStream limit = ByteStreams.limit(is, length);
-          bodyConsumer.accept(limit);
-          while (limit.skip(length) > 0);
+        if (!headers.containsKey("Node-path") &&
+            !headers.containsKey("Revision-number") &&
+            !headers.containsKey("SVN-fs-dump-format-version") &&
+            !headers.containsKey("UUID")) {
+          // svnrdump produces broken dump nodes for a path copy from the incubator (tika). ignore any
+          // nodes that are invalid.
+          System.err.println("Odd record in "
+              + path + ": " + headers);
+          if (headers.containsKey("Content-length")) {
+            long length = Long.parseLong(headers.get("Content-length"));
+            ByteStreams.skipFully(is, length);
+          }
+        } else {
+          headerConsumer.accept(headers);
+  
+          if (headers.containsKey("Content-length")) {
+            long length = Long.parseLong(headers.get("Content-length"));
+            InputStream limit = ByteStreams.limit(is, length);
+            bodyConsumer.accept(limit);
+            while (limit.skip(length) > 0);
+          }
         }
       } while (true);
     }
