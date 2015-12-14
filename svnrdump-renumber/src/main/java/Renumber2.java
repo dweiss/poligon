@@ -56,35 +56,13 @@ public class Renumber2 {
     printf("%,d input dump files.", revDumps.size());
     
     for (Path revDump : revDumps) {
-      try {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        visitDumpFile(revDump, (block) -> {
-          try {
-            block.writeTo(baos);
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        });
-  
-        if (revDump.toString().endsWith("r712381.rev")) {
-          continue;
+      visitDumpFile(revDump, (block) -> {
+        try {
+          block.writeTo(os);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
         }
-        
-        String old = new String(Files.readAllBytes(revDump), StandardCharsets.ISO_8859_1);
-        String rew = new String(baos.toByteArray(), StandardCharsets.ISO_8859_1);
-  
-        old = old.replaceAll("\n+", "\n");
-        rew = rew.replaceAll("\n+", "\n");
-        
-        if (!old.equals(rew)) {
-          os.write(baos.toByteArray());
-          System.out.println(revDump);
-          throw new IOException();
-        }
-      } catch (OutOfMemoryError e) {
-        printf("OOM: " + revDump);
-        System.gc();
-      }
+      });
     }
   }
 
