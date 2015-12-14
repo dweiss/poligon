@@ -11,7 +11,9 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,9 +56,32 @@ public class Renumber2 {
       .sorted((a, b) -> Long.compare(revNumFromFileName(a), revNumFromFileName(b)))
       .collect(Collectors.toList());
     printf("%,d input dump files.", revDumps.size());
-    
+
+    Map<Long, Long> revRemap = new HashMap<>(); 
+    revDumps.forEach((file) -> {
+      long revNum = revNumFromFileName(file);
+      revRemap.put(revNum, revRemap.size() + 1L);
+    });
+    long [] revisions = revRemap.keySet().stream().mapToLong(Long::longValue).sorted().toArray();
+
     for (Path revDump : revDumps) {
       visitDumpFile(revDump, (block) -> {
+        // Check sanity.
+        if (block.headers.containsKey("Revision-number")) {
+          if (Long.parseLong(block.headers.get("Revision-number")) !=
+              revNumFromFileName(revDump)) {
+            throw new RuntimeException("Rev num mismatch: " + revDump);
+          }
+        }
+
+        // Remap headers.
+        block.headers.entrySet().stream().forEach((e) -> {
+          String k = e.getKey();
+          if (k.equals("Node-copyfrom-rev") ||
+              k.equals("Revision-number")) {
+            e.setValue(Long.toString(revMap(revRemap, revisions, Long.parseLong(e.getValue()))));
+          }});
+
         try {
           block.writeTo(os);
         } catch (IOException e) {
@@ -64,6 +89,22 @@ public class Renumber2 {
         }
       });
     }
+  }
+
+  private static long revMap(Map<Long, Long> revRemap, long [] revisions, long rev) {
+    if (!revRemap.containsKey(rev)) {
+      // Copied from an intermediate, non-Lucene revision (outside dumped path).
+      int slot = Arrays.binarySearch(revisions, rev);
+      slot = -slot - 1;
+      assert revisions[slot] > rev &&
+             revisions[slot - 1] < rev : 
+             revisions[slot - 1] + " " + rev + " " + revisions[slot];
+
+      // Take the largest Lucene-tree touching revision.
+      rev = revisions[slot - 1];
+      assert revRemap.containsKey(rev);
+    }
+    return revRemap.get(rev);
   }
 
   private static long revNumFromFileName(Path path) {
