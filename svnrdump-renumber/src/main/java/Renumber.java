@@ -87,7 +87,7 @@ public class Renumber {
                   return;
                 }
               }
-              
+
               // Emit headers, modify them on the way.
               headers.forEach((k, v) -> {
                 if (k.equals("Node-copyfrom-rev") ||
@@ -107,6 +107,8 @@ public class Renumber {
                   }
                   v = Long.toString(revisions.get(vv));
                 }
+                
+                if (k.equals(""))
 
                 try {
                   os.write((k + ": "+ v + "\n").getBytes(StandardCharsets.US_ASCII));
