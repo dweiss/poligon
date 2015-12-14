@@ -66,29 +66,73 @@ public class Renumber2 {
 
     for (Path revDump : revDumps) {
       visitDumpFile(revDump, (block) -> {
-        // Check sanity.
-        if (block.headers.containsKey("Revision-number")) {
-          if (Long.parseLong(block.headers.get("Revision-number")) !=
-              revNumFromFileName(revDump)) {
-            throw new RuntimeException("Rev num mismatch: " + revDump);
-          }
-        }
-
-        // Remap headers.
-        block.headers.entrySet().stream().forEach((e) -> {
-          String k = e.getKey();
-          if (k.equals("Node-copyfrom-rev") ||
-              k.equals("Revision-number")) {
-            e.setValue(Long.toString(revMap(revRemap, revisions, Long.parseLong(e.getValue()))));
-          }});
-
         try {
+          // Check sanity.
+          if (block.headers.containsKey("Revision-number")) {
+            if (Long.parseLong(block.headers.get("Revision-number")) !=
+                revNumFromFileName(revDump)) {
+              throw new RuntimeException("Rev num mismatch: " + revDump);
+            }
+          }
+  
+          // Remap headers.
+          block.headers.entrySet().stream().forEach((e) -> {
+            String k = e.getKey();
+            if (k.equals("Node-copyfrom-rev") ||
+                k.equals("Revision-number")) {
+              e.setValue(Long.toString(revMap(revRemap, revisions, Long.parseLong(e.getValue()))));
+            }
+          });
+
+          if (block.properties.containsKey("svn:mergeinfo")) {
+            String mergeInfo = block.properties.get("svn:mergeinfo");
+            if (mergeInfo != null) {
+              block.properties.put("svn:mergeinfo", parseMergeInfo(revRemap, revisions, mergeInfo));
+            }
+          }
+
           block.writeTo(os);
-        } catch (IOException e) {
+        } catch (Exception e) {
+          printf("Error in %s", revDump);
           throw new RuntimeException(e);
         }
       });
     }
+  }
+
+  private static String parseMergeInfo(Map<Long, Long> revRemap, long [] revisions, String value) {
+    StringBuilder b = new StringBuilder();
+    if (value.trim().isEmpty()) {
+      return "";
+    }
+
+    for (String line : value.split("\\n+")) {
+      int colon = line.indexOf(':');
+      if (colon < 0) {
+        throw new RuntimeException("No colon: " + line + " => '" + value + "'");
+      }
+      
+      String file = line.substring(0, colon);
+      b.append(file).append(":");
+      b.append(Arrays.stream(line.substring(colon + 1).split("\\,")).map((v) -> {
+        return mapRev(revRemap, revisions, v);
+      }).collect(Collectors.joining(",")));
+      b.append('\n');
+    }
+
+    return b.toString();
+  }
+
+  private static String mapRev(Map<Long, Long> revRemap, long [] revisions, String v) {
+    int i;
+    if ((i = v.indexOf('-')) >= 0) {
+      return mapRev(revRemap, revisions, v.substring(0, i)) + "-" + 
+             mapRev(revRemap, revisions, v.substring(i + 1));
+    }
+    if (v.endsWith("*")) {
+      return mapRev(revRemap, revisions, v.substring(0, v.length() - 1)) + "*";
+    }
+    return Long.toString(revMap(revRemap, revisions, Long.parseLong(v)));
   }
 
   private static long revMap(Map<Long, Long> revRemap, long [] revisions, long rev) {
