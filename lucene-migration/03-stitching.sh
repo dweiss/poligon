@@ -134,4 +134,5 @@ git config core.filemode false
 #   git log -1
 #   git log --follow lucene/core/src/java/org/apache/lucene/index/IndexWriter.java
 #   git log --follow solr/core/src/java/org/apache/solr/core/SolrCore.java       
+#   git log --follow solr/solrj/src/java/org/apache/solr/client/solrj/SolrClient.java
 
