@@ -29,3 +29,16 @@ git reflog expire --expire=now --all && git gc --prune=now --aggressive
 
 # -> reduces to 163 mb, but at the cost of breaking any past revision which actually used these files.
 
+# remove folders:
+solr/site
+solr/site-src
+lucene/site
+src/site
+
+sandbox/projects/appex/?
+sandbox/projects/larm/?
+sandbox/?
+site/*
+
+docs/*
+
