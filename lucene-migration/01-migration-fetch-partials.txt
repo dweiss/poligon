@@ -1,0 +1,39 @@
+
+#
+# SVN->git conversion log.
+# Not exact commands, but outlines the process.
+#
+
+# Get authors.txt from Apache
+wget --no-check-certificate https://git-wip-us.apache.org/authors.txt
+
+# Add a few missing entries (early Lucene history).
+echo '(no author) = noauthor <noauthor@noemail>' >> authors.txt
+echo 'gschwarz = gschwarz <gschwarz@noemail>' >> authors.txt
+echo 'cmarschner = cmarschner <cmarschner@noemail>' >> authors.txt
+
+# Lucene: from initial Apache import until Solr-Lucene merger
+mkdir 01-lucene && cd 01-lucene
+git svn init https://svn.apache.org/repos/asf                 --trunk lucene/java/trunk --tags lucene/java/tags --branches lucene/java/branches
+git svn fetch -r 149564:925462 --log-window-size 10000 -A ../authors.txt
+
+# Solr, incubator
+mkdir 02-solr-incubator && cd 02-solr-incubator
+git svn init https://svn.apache.org/repos/asf --trunk incubator/solr/trunk --tags incubator/solr/tags --branches incubator/solr/branches
+git svn fetch -r 369921:497230 --log-window-size 10000 -A ../authors.txt
+
+# Solr, migrated to Lucene
+mkdir 03-solr && cd 03-solr
+git svn init https://svn.apache.org/repos/asf --trunk lucene/solr/trunk --tags lucene/solr/tags --branches lucene/solr/branches
+git svn fetch -r 497231:924463 --log-window-size 10000 -A ../authors.txt
+
+# Solr-Lucene history, joint (reuse existing Apache's git mirror).
+# => DOES NOT WORK (git authors are invalid for certain commits, cause problems when branch-filter is applied).
+# mkdir 04-lucene-solr && cd 04-lucene-solr
+# git clone --mirror git://git.apache.org/lucene-solr.git .
+
+# Solr-Lucene history, joint (import from SVN as Apache's git contains invalid author tags).
+mkdir 04-lucene-solr && cd 04-lucene-solr
+git svn init https://svn.apache.org/repos/asf --trunk lucene/dev/trunk --tags lucene/dev/tags --branches lucene/dev/branches
+git svn fetch -r 924460:HEAD --log-window-size 10000 -A ../authors.txt
+
