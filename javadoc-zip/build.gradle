@@ -1,0 +1,27 @@
+plugins {
+  id 'java'
+  id 'idea'
+}
+
+group 'com.carrotsearch'
+version '1.0-SNAPSHOT'
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+}
+
+plugins.withType(JavaPlugin) {
+  sourceCompatibility = JavaVersion.VERSION_11
+  targetCompatibility = JavaVersion.VERSION_11
+}
+
+idea {
+  module {
+    outputDir file('build/idea/classes/main')
+    testOutputDir file('build/idea/classes/test')
+    downloadSources = true
+  }
+}
